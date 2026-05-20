@@ -1,6 +1,6 @@
 # Reinforcement Learning Algorithm Templates
 
-This repository contains clean and reusable implementations of classic reinforcement learning algorithms.
+This repository contains clean, modern and reusable implementations of classic reinforcement learning algorithms.
 
 The goal is not to provide state-of-the-art performance, but to build understandable algorithm templates for learning and experimentation.
 
@@ -11,6 +11,7 @@ The goal is not to provide state-of-the-art performance, but to build understand
 - Minimal dependencies
 - PyTorch-based deep RL algorithms
 - Clear notes and pseudocode for each algorithm
+- Based on new dependencies（Gymnasium=1.2.3, Pytorch=2.9, python=3.11)
 
 ## Algorithms
 
