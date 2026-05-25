@@ -49,3 +49,8 @@ The goal is not to provide state-of-the-art performance, but to build understand
 git clone https://github.com/your-username/rl-algorithm-templates.git
 cd rl-algorithm-templates
 pip install -r requirements.txt
+```
+
+## Notes
+在AI时代，把自己的学习过程记录下来提供给AI，可以是一种丰富的信息，让AI更好的指导你的理解思路，帮助查漏补缺。
+
