@@ -69,3 +69,5 @@ grad 就存在每一个可训练参数对象自己的 .grad 属性里。
 每个 Parameter 都是一个 Tensor，并且通常默认 requires_grad=True。
 net.parameters()自动返回网络参数的迭代器，使得optimizer进行优化更新。
 pytorch数据默认不求梯度，参数默认求梯度。
+
+### 7.
