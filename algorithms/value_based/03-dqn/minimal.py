@@ -15,7 +15,7 @@ class DQN(nn.Module):
         self.out = nn.Linear(h1_nodes,out_actions)
 
     def forward(self,x):
-        x = F.relu(self.fc(x))
+        x = F.relu(self.fc1(x))
         x = self.out(x)
         return x
 
@@ -39,6 +39,7 @@ class FrozenLakeDQL():
     network_sync_rate = 10
     relay_memory_size = 1000
     mini_batch_size = 32
+    ACTIONS = ['L', 'D', 'R', 'U']
 
     loss_fn = nn.MSELoss()
     optimizer =None
@@ -67,9 +68,9 @@ class FrozenLakeDQL():
         for i in range(episodes):
             state = env.reset()[0]
             terminated = False
-            trunctuated =False
+            truncated =False
 
-            while(not terminated and not trunctuated):
+            while(not terminated and not truncated):
                 if random.random()<epsilon:
                     action = env.action_space.sample()
                 else:
@@ -81,24 +82,30 @@ class FrozenLakeDQL():
 
                 state = new_state
                 step_count+=1
+                print('step count :',step_count)
 
             if reward == 1:
                 rewards_per_episode[i] = 1
 
             if len(memory)>self.mini_batch_size and np.sum(rewards_per_episode)>0:
                 mini_batch = memory.sample(self.mini_batch_size)
+                print('Sample mini batch')
                 self.optimize(mini_batch,policy_dqn,target_dqn)
 
-                epsilon = max(epsilon-1/epsilon,0)
+                epsilon = max(epsilon-1/episodes,0)
                 epsilon_history.append(epsilon)
 
                 if step_count > self.network_sync_rate:
                     target_dqn.load_state_dict(policy_dqn.state_dict())
                     step_count = 0
+                    print('target network sync !')
+            if i % 100 ==0:
+                print( '100 episodes finished')
+            print('the',i,"episode finished")
 
         env.close()
 
-        torch.save(policy_dqn.state_dict(),"frozen_lake_dql.pt")
+        torch.save(policy_dqn.state_dict(),"data/frozen_lake_dql.pt")
 
         plt.figure(1)
         sum_rewards = np.zeros(episodes)
@@ -110,7 +117,7 @@ class FrozenLakeDQL():
         plt.subplot(122)
         plt.plot(epsilon_history)
 
-        plt.savefig('frozen_lake_dql.png')
+        plt.savefig('data/frozen_lake_dql.png')
 
     def optimize(self,mini_batch,policy_dqn,target_dqn):
         num_states = policy_dqn.fc1.in_features
@@ -196,5 +203,5 @@ if __name__ == '__main__':
 
     frozen_lake = FrozenLakeDQL()
     is_slippery = False
-    frozen_lake.train(1000, is_slippery=is_slippery)
+    frozen_lake.train(1000,render=False, is_slippery=is_slippery)
     frozen_lake.test(10, is_slippery=is_slippery)
