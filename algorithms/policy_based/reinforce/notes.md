@@ -39,7 +39,8 @@ Reinforce使用一整条轨迹来更新参数，这条轨迹的概率是所有�
 其实也可以用平均值，二者只差了一个常数系数，本质上一样，只是梯度尺度不同
 
 ### 2. 这个算法中的计算图是怎么样的？
-Reinforce中有两个计算图，分别是1）策略网络本身的计算图：state -> fc1 -> relu -> fc2 -> softmax -> action probability；
+Reinforce中有两个计算图，分别是
+1）策略网络本身的计算图：state -> fc1 -> relu -> fc2 -> softmax -> action probability；
 2）REINFORCE 更新时的计算图：log_prob -> policy_loss -> backward -> 更新 policy 参数。
 reward、return、env.step() 不在 PyTorch 计算图里；真正参与反向传播的是 log_prob 这条链路。
 假设一个episode走了4步，那么其计算图为：
@@ -96,3 +97,4 @@ REINFORCE 的新意主要在于：在随机策略、随机采样、环境不可�
 理论目标仍然是对所有时间步的 actor loss 项求和；TD 方法只是让每个时间步的目标可以即时计算，因此实现上可以逐步更新，而不必等整条轨迹结束后再统一求和。
 根据策略梯度的公式，所有actor-critic，无论TD与否，目标函数的梯度对应的期望是对整个轨迹的log_prob求和的期望，所有的算法都要这么做。
 TD和Monte Carlo的区别只在于更新的步频不一样而已。
+

@@ -70,7 +70,7 @@ class FrozenLakeDQL():
             terminated = False
             truncated =False
 
-            while(not terminated and not truncated):
+            while not terminated and not truncated:
                 if random.random()<epsilon:
                     action = env.action_space.sample()
                 else:
