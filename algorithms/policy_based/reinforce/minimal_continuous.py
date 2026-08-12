@@ -9,7 +9,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch import device
-from torch.distributions import Categorical
 
 import gymnasium as gym
 
@@ -17,30 +16,39 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 print(device)
 
-env_id = "CartPole-v1"
+env_id = "Pendulum-v1"
 env = gym.make(env_id)
 eval_env = gym.make(env_id)
 
 s_size = env.observation_space.shape[0]
-a_size = env.action_space.n
+a_size = env.action_space.shape[0]
 
 class Policy(nn.Module):
     def __init__(self,s_size,a_size,h_size):
         super(Policy,self).__init__()
         self.fc1 = nn.Linear(s_size,h_size)
         self.fc2 = nn.Linear(h_size,a_size)
+        self.fc2_ = nn.Linear(h_size,a_size)
 
     def forward(self,x):
         x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return F.softmax(x, dim=1)
+        mu = self.fc2(x)
+        log_std = self.fc2_(x)
+        return mu,log_std
 
     def act(self,state):
-        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        probs = self.forward(state).cpu()
-        m = Categorical(probs)
-        action = m.sample()
-        return action.item(),m.log_prob(action)
+        state = torch.as_tensor(
+            state,
+            dtype=torch.float32,
+            device=device,
+        ).unsqueeze(0)
+        mu,log_std = self.forward(state)
+        log_std = torch.clamp(log_std,-20,2)
+        std = log_std.exp()
+        dist = torch.distributions.Normal(mu,std)
+        action = dist.sample()
+        log_prob = dist.log_prob(action)
+        return action.squeeze(0).detach().cpu().numpy(),log_prob
 
 def reinforce(policy,optimizer,n_training_episodes,max_t,gamma,print_every):
     scores_deque = deque(maxlen=100)
@@ -114,12 +122,12 @@ def evaluate_agent(env, max_steps, n_eval_episodes, policy):
 
 
 cartpole_hyperparameters = {
-    "h_size": 16,
-    "n_training_episodes": 1000,
+    "h_size": 64,
+    "n_training_episodes": 10000,
     "n_evaluation_episodes": 10,
-    "max_t": 1000,
-    "gamma": 1.0,
-    "lr": 1e-2,
+    "max_t": 200,
+    "gamma": 0.90,
+    "lr": 5e-4,
     "env_id": env_id,
     "state_space": s_size,
     "action_space": a_size,
