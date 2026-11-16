@@ -7,30 +7,55 @@ REINFORCE 是一种 基于策略的强化学习算法。它不直接学习每个
 
 ## 2. Key Components
 
-- Q-network
-- Target network
-- Experience replay
-- Epsilon-greedy exploration
+- 随机策略网络 $\pi_\theta(a\mid s)$：输出动作分布，通过采样动作进行探索；连续动作对应概率密度。
+- On-policy 轨迹采样：用当前策略收集完整 episode，每条轨迹或每批新轨迹进行一次策略更新。
+- Monte Carlo reward-to-go：使用每个时间步之后实际获得的累计奖励，不用价值预测补足未来回报（不 bootstrap）。
+- Log-derivative trick：利用 $\nabla_\theta p_\theta = p_\theta\nabla_\theta\log p_\theta$，将期望回报的梯度写成可采样估计的形式，无需对环境或动作采样过程求导。
+- 可选 baseline：减去与当前动作无关、更新策略时固定的基准值，以降低梯度估计的方差；基础 REINFORCE 不要求价值网络。
+
+基础 REINFORCE 不需要 Q-network、target network、experience replay 或 epsilon-greedy；探索来自随机策略本身。
 
 ## 3. Update Rule
 
-目标值：
+令 $T$ 为轨迹长度，$r_t$ 表示在状态 $s_t$ 执行动作 $a_t$ 后获得的奖励，$\gamma$ 为折扣率。这里采用折扣起始状态目标：
 
-y = r + γ max_a' Q_target(s', a')
+$$
+J(\theta) = \mathbb{E}_{\tau\sim\pi_\theta}\left[\sum_{t=0}^{T-1}\gamma^t r_t\right]
+$$
 
-损失函数：
+每个时间步的 reward-to-go 为：
 
-L = (Q(s, a) - y)^2
+$$
+G_t = \sum_{k=t}^{T-1}\gamma^{k-t}r_k
+$$
+
+对当前策略采样的一条完整轨迹，构造用于自动求导的代理损失：
+
+$$
+L(\theta) = -\sum_{t=0}^{T-1}\gamma^t\,\operatorname{stopgrad}(G_t)\,\log\pi_\theta(a_t\mid s_t)
+$$
+
+用梯度下降更新参数，等价于沿该轨迹估计的策略梯度上升：
+
+$$
+\theta \leftarrow \theta - \alpha\nabla_\theta L(\theta)
+$$
+
+- $\alpha$ 为学习率；上式表示普通梯度下降，也可用 Adam 等优化器处理同一损失的梯度。
+- 状态、采样动作和回报在这次更新中视为固定数据，只通过 $\log\pi_\theta$ 对策略参数求导；`stopgrad` 表示不对回报反向传播。
+- 使用多条轨迹时，对各条轨迹的损失取平均。该 loss 用于产生策略梯度，其数值本身不是策略表现的评估指标。
+- 当 $\gamma=1$ 时，外层 $\gamma^t$ 自然为 1；当 $\gamma<1$ 时，对上述目标不能随意省略它。
+
+参考：[Spinning Up：策略梯度与代理损失](https://spinningup.openai.com/en/latest/spinningup/rl_intro3.html)。
 
 ## 4. Pseudocode
 
-1. Initialize replay buffer
-2. Initialize Q-network and target network
-3. Interact with environment
-4. Store transitions
-5. Sample mini-batch
-6. Update Q-network
-7. Periodically update target network
+1. 初始化随机策略网络和优化器。
+2. 用当前策略采样一条或一批完整轨迹，采样期间保持策略不变。
+3. 根据实际奖励，逆序计算每个时间步的 reward-to-go。
+4. 按前述公式，用回报加权动作的 log probability，构造策略损失。
+5. 清空梯度、反向传播，更新策略一次。
+6. 丢弃旧轨迹，用更新后的策略重新采样，重复上述过程。
 
 ## 5. Key Notes
 
@@ -103,3 +128,34 @@ TD和Monte Carlo的区别只在于更新的步频不一样而已。
 但是存在两大困难，动作采样不可导和环境不可导。
 直接求导通过改变 action 的数值来提高 R；REINFORCE 通过改变 action 的概率分布，使高回报 action 更可能被采样。
 两者都优化期望回报，直接求导调整样本路径，REINFORCE 调整产生这些路径的概率。
+
+### 13.REINFORCE有非常多的改进和工程细节
+一个重要的点是action的截断问题，这个在黑色笔记本上进行了总结。
+一个重要的是reward to go， learned baseline，advantage function的等的改进，learning baseline实质上引入了可以学习的V网络，有点actor critic的结构了。这些都是针对值函数的改进。
+还有一种是针对策略函数的改进，例如KL置信域、clip截断等，这条路上衍生出了TRPO、PPO等
+
+
+### 14.REINFORCE的最大的问题是方差太高，但是这个问题可以用更多的数据和batch来解决
+
+更准确地说，大 batch 能缓解而非彻底解决高方差：在固定策略下，对 $B$ 条独立同分布轨迹的梯度求平均，其方差为单轨迹梯度方差的 $1/B$。
+仅增加总训练回合数、仍逐轨迹更新，并不会直接降低每次更新的方差。
+增大 batch 会增加每次更新的采样成本，在总样本数固定时还会减少更新次数；通常需要配合 baseline、合理探索和学习率设置，不能保证收敛。
+增大batch也会增加训练收尾时候的稳定性，小batch很容易在长训练的末尾发生性能的衰退
+
+### 15.Critic 除了作为 MC baseline，还可以做什么？
+
+Critic 的本质是“估计长期价值”，作为 MC baseline 只是它的一种用法。
+
+1. 预测未来回报：用于 TD bootstrap
+
+   $$
+   \delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)
+   $$
+
+2. 构造更灵活的 advantage：n-step 和 GAE
+
+3. 直接指导动作优化：学习 $Q(s,a)$
+
+   $$
+   L_{\text{actor}} = -\mathbb{E}_s\left[Q_\phi(s,\mu_\theta(s))\right]
+   $$

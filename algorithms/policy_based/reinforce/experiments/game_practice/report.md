@@ -1,0 +1,1 @@
+AIM: try to apply REINFORCE onto different games 
